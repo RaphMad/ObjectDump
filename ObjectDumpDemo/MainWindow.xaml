@@ -1,0 +1,49 @@
+﻿<Window x:Class="ObjectDumpDemo.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="ObjectDump Demo" Height="400" Width="500">
+   <Grid>
+
+      <Grid.ColumnDefinitions>
+         <ColumnDefinition Width="*" />
+         <ColumnDefinition Width="Auto" />
+         <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+
+      <TreeView Grid.Row="0" Grid.Column="0" Name="TreeView" SelectedItemChanged="HandleTreeViewSelectedItemChanged" />
+
+      <GridSplitter
+              Grid.Row="0"
+              Grid.Column="1"
+              HorizontalAlignment="Center"
+              VerticalAlignment="Stretch"
+              ShowsPreview="True"
+              Width="3"
+              />
+
+
+      <Grid Grid.Row="0" Grid.Column="2">
+         <Grid.RowDefinitions>
+            <RowDefinition Height="40" />
+            <RowDefinition Height="30" />
+            <RowDefinition Height="30" />
+            <RowDefinition Height="40" />
+            <RowDefinition Height="30" />
+            <RowDefinition Height="30" />
+            <RowDefinition Height="40" />
+            <RowDefinition Height="30" />
+         </Grid.RowDefinitions>
+
+         <Label Grid.Row="0" HorizontalAlignment="Center" VerticalAlignment="Center">Type:</Label>
+         <TextBox Grid.Row="1" VerticalAlignment="Center" Margin="5,0,5,0" IsReadOnly="True" Name="TextBoxType"></TextBox>
+
+         <Label Grid.Row="3" HorizontalAlignment="Center" VerticalAlignment="Center">Member type:</Label>
+         <TextBox Grid.Row="4" VerticalAlignment="Center" Margin="5,0,5,0" IsReadOnly="True" Name="TextBoxMemberType"></TextBox>
+
+         <Label Grid.Row="6" HorizontalAlignment="Center" VerticalAlignment="Center">.ToString():</Label>
+         <TextBox Grid.Row="7" VerticalAlignment="Center" Margin="5,0,5,0" IsReadOnly="True" Name="TextBoxValue"></TextBox>
+
+      </Grid>
+
+   </Grid>
+</Window>
