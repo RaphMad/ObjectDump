@@ -4,7 +4,7 @@
    using System.Collections.Generic;
 
    /// <summary>
-   /// Represents an object dump without type information of the dumped object.
+   /// Stores dump information for a single object.
    /// </summary>
    public interface IObjectDump
    {
@@ -19,9 +19,14 @@
       string ObjectName { get; }
 
       /// <summary>
-      /// Gets the type of the object.
+      /// Gets the declared type of the object.
       /// </summary>
-      Type ObjectType { get; }
+      Type DeclaredType { get; }
+
+      /// <summary>
+      /// Gets the actual type of the object.
+      /// </summary>
+      Type ActualType { get; }
 
       /// <summary>
       /// Gets a string describing the content of the object.

@@ -7,39 +7,65 @@
    using System.Reflection;
 
    /// <summary>
-   /// Contains information about the data contained in an object.
+   /// Stores dump information for a single object.
    /// </summary>
    public class ObjectDump : IObjectDump
    {
+      #region fields
+
+      /// <summary>
+      /// Indicates whether to dump properties.
+      /// </summary>
+      private readonly bool _dumpProperties;
+
+      /// <summary>
+      /// Indicates whether to dump enumerable members.
+      /// </summary>
+      private readonly bool _dumpEnumerableMembers;
+
+      #endregion
+
       #region constructor
 
       /// <summary>
       /// Initializes a new instance of the <see cref="ObjectDump" /> class.
       /// </summary>
-      /// <param name="valueToDump">The value to dump.</param>
+      /// <param name="valueToDump">The object to dump.</param>
+      /// <param name="declaredType">The declared type of the dumped object.</param>
       /// <param name="name">Name of the value being dumped.</param>
-      /// <param name="declarationType">
-      /// The declaration type of the value. 
-      /// In fact only needed to have a type for "null" objects, for non-null objects the actual type will be dynamically determined.
+      /// <param name="dumpProperties">
+      /// Indicates whether to dump properties.
+      /// Take into consideration that property getters may cause side-effects when being evaluated!
       /// </param>
-      public ObjectDump(object valueToDump, string name, Type declarationType)
+      /// <param name="dumpEnumerableMembers">
+      /// Indicates whether to dump enumerable members.
+      /// Take into consideration that enumerating may cause side-effects!
+      /// </param>
+      public ObjectDump(
+         object valueToDump,
+         Type declaredType,
+         string name = "Root",
+         bool dumpProperties = false,
+         bool dumpEnumerableMembers = false)
       {
+         _dumpProperties = dumpProperties;
+         _dumpEnumerableMembers = dumpEnumerableMembers;
+
          RawObject = valueToDump;
+         DeclaredType = declaredType;
          ObjectName = name;
 
          if (valueToDump != null)
          {
-            // dynamically determine the actual type
-            ObjectType = valueToDump.GetType();
+            ActualType = valueToDump.GetType();
             ObjectValue = CalculateDescription();
             PublicFields = CalculatePublicFields();
-            Properties = CalculateProperties();
-            EnumerableMembers = CalculateEnumerableMembers();
+            Properties = _dumpProperties ? CalculateProperties() : Enumerable.Empty<IObjectDump>();
+            EnumerableMembers = _dumpEnumerableMembers ? CalculateEnumerableMembers() : Enumerable.Empty<IObjectDump>();
          }
          else
          {
-            // object to dump is null - at least we can use its declared type
-            ObjectType = declarationType;
+            ActualType = typeof(void);
             ObjectValue = "<null>";
             PublicFields = Enumerable.Empty<IObjectDump>();
             Properties = Enumerable.Empty<IObjectDump>();
@@ -62,9 +88,14 @@
       public string ObjectName { get; private set; }
 
       /// <summary>
-      /// Gets the type of the object.
+      /// Gets the declaration type of the object.
       /// </summary>
-      public Type ObjectType { get; private set; }
+      public Type DeclaredType { get; private set; }
+
+      /// <summary>
+      /// Gets the actual type of the object.
+      /// </summary>
+      public Type ActualType { get; private set; }
 
       /// <summary>
       /// Gets a string describing the content of the object.
@@ -96,7 +127,19 @@
       /// <returns>A descriptive string.</returns>
       private string CalculateDescription()
       {
-         return RawObject.ToString();
+         string description;
+
+         // take into account .ToString() overrides that throw an exception
+         try
+         {
+            description = RawObject.ToString();
+         }
+         catch (Exception ex)
+         {
+            description = "<Exception>: " + ex;
+         }
+
+         return description;
       }
 
       /// <summary>
@@ -106,9 +149,14 @@
       private IEnumerable<IObjectDump> CalculatePublicFields()
       {
          // get all public fields of the instance
-         return ObjectType.GetMembers(BindingFlags.Instance | BindingFlags.Public)
+         return ActualType.GetMembers(BindingFlags.Instance | BindingFlags.Public)
                           .OfType<FieldInfo>()
-                          .Select(field => new ObjectDump(field.GetValue(RawObject), field.Name, field.FieldType))
+                          .Select(field => new ObjectDump(
+                                     field.GetValue(RawObject),
+                                     field.FieldType,
+                                     field.Name,
+                                     _dumpProperties,
+                                     _dumpEnumerableMembers))
                           .OrderBy(dump => dump.ObjectName);
       }
 
@@ -119,11 +167,39 @@
       private IEnumerable<IObjectDump> CalculateProperties()
       {
          // get all public properties that are not indexed
-         return ObjectType.GetMembers(BindingFlags.Instance | BindingFlags.Public)
+         return ActualType.GetMembers(BindingFlags.Instance | BindingFlags.Public)
                           .OfType<PropertyInfo>()
                           .Where(property => !property.GetIndexParameters().Any())
-                          .Select(property => new ObjectDump(property.GetValue(RawObject, null), property.Name, property.PropertyType))
+                          .Select(property => new ObjectDump(
+                                     GetSafePropertyValue(property),
+                                     property.PropertyType,
+                                     property.Name,
+                                     _dumpProperties,
+                                     _dumpEnumerableMembers))
                           .OrderBy(dump => dump.ObjectName);
+      }
+
+      /// <summary>
+      /// Gets the value of the given property and avoids possible exceptions.
+      /// </summary>
+      /// <param name="property">The property.</param>
+      /// <returns>The value of the property if retrievable.</returns>
+      private object GetSafePropertyValue(PropertyInfo property)
+      {
+         object propertyValue;
+
+         // take into account properties that throw an exception
+         try
+         {
+            propertyValue = property.GetValue(RawObject, null);
+         }
+         catch (Exception ex)
+         {
+            // return the thrown exception as the actual value
+            propertyValue = ex;
+         }
+
+         return propertyValue;
       }
 
       /// <summary>
@@ -144,7 +220,7 @@
 
             foreach (object member in enumeration)
             {
-               yield return new ObjectDump(member, "[" + index++ + "]", enumeratedType);
+               yield return new ObjectDump(member, enumeratedType, "[" + index++ + "]", _dumpProperties, _dumpEnumerableMembers);
             }
          }
       }
@@ -155,7 +231,7 @@
       /// <returns>The type T of the first IEnumerable of T implementation if present, null otherwise.</returns>
       private Type GetGenericEnumeratedType()
       {
-         return ObjectType.GetInterfaces()
+         return ActualType.GetInterfaces()
                           .Where(t => t.IsGenericType && t.GetGenericTypeDefinition() == typeof(IEnumerable<>))
                           .Select(t => t.GetGenericArguments()[0])
                           .FirstOrDefault();
